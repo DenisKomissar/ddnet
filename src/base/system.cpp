@@ -1,22 +1,18 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <array> // std::size
 #include <atomic>
 #include <cctype>
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
-#include <ctime>
-#include <thread>
+#include <iterator> // std::size
 
 #include "system.h"
 
 #include "lock_scope.h"
 #include "logger.h"
 
-#include <sys/stat.h>
 #include <sys/types.h>
 
 #include <chrono>
@@ -29,6 +25,7 @@
 
 #if defined(CONF_FAMILY_UNIX)
 #include <csignal>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/utsname.h>
 #include <sys/wait.h>
@@ -37,7 +34,6 @@
 /* unix net includes */
 #include <arpa/inet.h>
 #include <cerrno>
-#include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -58,10 +54,6 @@
 #include <mach/mach_time.h>
 #endif
 
-#ifdef CONF_PLATFORM_ANDROID
-#include <android/log.h>
-#endif
-
 #elif defined(CONF_FAMILY_WINDOWS)
 #define WIN32_LEAN_AND_MEAN
 #undef _WIN32_WINNT
@@ -70,9 +62,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
-#include <direct.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <io.h>
 #include <process.h>
 #include <share.h>
@@ -395,8 +385,8 @@ int io_sync(IOHANDLE io)
 #endif
 }
 
-#define ASYNC_BUFSIZE 8 * 1024
-#define ASYNC_LOCAL_BUFSIZE 64 * 1024
+#define ASYNC_BUFSIZE (8 * 1024)
+#define ASYNC_LOCAL_BUFSIZE (64 * 1024)
 
 // TODO: Use Thread Safety Analysis when this file is converted to C++
 struct ASYNCIO
@@ -3241,12 +3231,12 @@ int str_time(int64_t centisecs, int format, char *buffer, int buffer_size)
 		if(centisecs >= day)
 			return str_format(buffer, buffer_size, "%" PRId64 "d %02" PRId64 ":%02" PRId64 ":%02" PRId64, centisecs / day,
 				(centisecs % day) / hour, (centisecs % hour) / min, (centisecs % min) / sec);
-		// fall through
+		[[fallthrough]];
 	case TIME_HOURS:
 		if(centisecs >= hour)
 			return str_format(buffer, buffer_size, "%02" PRId64 ":%02" PRId64 ":%02" PRId64, centisecs / hour,
 				(centisecs % hour) / min, (centisecs % min) / sec);
-		// fall through
+		[[fallthrough]];
 	case TIME_MINS:
 		return str_format(buffer, buffer_size, "%02" PRId64 ":%02" PRId64, centisecs / min,
 			(centisecs % min) / sec);
@@ -3254,7 +3244,7 @@ int str_time(int64_t centisecs, int format, char *buffer, int buffer_size)
 		if(centisecs >= hour)
 			return str_format(buffer, buffer_size, "%02" PRId64 ":%02" PRId64 ":%02" PRId64 ".%02" PRId64, centisecs / hour,
 				(centisecs % hour) / min, (centisecs % min) / sec, centisecs % sec);
-		// fall through
+		[[fallthrough]];
 	case TIME_MINS_CENTISECS:
 		return str_format(buffer, buffer_size, "%02" PRId64 ":%02" PRId64 ".%02" PRId64, centisecs / min,
 			(centisecs % min) / sec, centisecs % sec);

@@ -9,6 +9,8 @@
 
 #include "uuid_manager.h"
 
+#include <cstdlib>
+
 static const int DEBUG = 0;
 
 enum
@@ -36,11 +38,6 @@ struct CItemEx
 		return Result;
 	}
 };
-
-static int GetTypeFromIndex(int Index)
-{
-	return ITEMTYPE_EX - Index - 1;
-}
 
 struct CDatafileItemType
 {
@@ -578,6 +575,11 @@ bool CDataFileWriter::Open(class IStorage *pStorage, const char *pFilename, int 
 {
 	Init();
 	return OpenFile(pStorage, pFilename, StorageType);
+}
+
+int CDataFileWriter::GetTypeFromIndex(int Index)
+{
+	return ITEMTYPE_EX - Index - 1;
 }
 
 int CDataFileWriter::GetExtendedItemTypeIndex(int Type)

@@ -18,8 +18,10 @@
 #include <engine/shared/linereader.h>
 #include <engine/shared/memheap.h>
 #include <engine/storage.h>
+
 #include <game/collision.h>
 #include <game/gamecore.h>
+#include <game/mapitems.h>
 #include <game/version.h>
 
 #include <game/generated/protocol7.h>
@@ -1132,7 +1134,26 @@ void CGameContext::OnTick()
 	// Warning: do not put code in this function directly above or below this comment
 }
 
+static int PlayerFlags_SevenToSix(int Flags)
+{
+	int Six = 0;
+	if(Flags & protocol7::PLAYERFLAG_CHATTING)
+		Six |= PLAYERFLAG_CHATTING;
+	if(Flags & protocol7::PLAYERFLAG_SCOREBOARD)
+		Six |= PLAYERFLAG_SCOREBOARD;
+	if(Flags & protocol7::PLAYERFLAG_AIM)
+		Six |= PLAYERFLAG_AIM;
+	return Six;
+}
+
 // Server hooks
+void CGameContext::OnClientPrepareInput(int ClientID, void *pInput)
+{
+	auto *pPlayerInput = (CNetObj_PlayerInput *)pInput;
+	if(Server()->IsSixup(ClientID))
+		pPlayerInput->m_PlayerFlags = PlayerFlags_SevenToSix(pPlayerInput->m_PlayerFlags);
+}
+
 void CGameContext::OnClientDirectInput(int ClientID, void *pInput)
 {
 	if(!m_World.m_Paused)
@@ -2214,7 +2235,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 				return;
 			}
 
-			// Switch team on given client and kill/respawn him
+			// Switch team on given client and kill/respawn them
 			if(m_pController->CanJoinTeam(pMsg->m_Team, ClientID))
 			{
 				if(pPlayer->IsPaused())
@@ -4101,6 +4122,18 @@ int CGameContext::GetClientVersion(int ClientID) const
 	IServer::CClientInfo Info = {0};
 	Server()->GetClientInfo(ClientID, &Info);
 	return Info.m_DDNetVersion;
+}
+
+int64_t CGameContext::ClientsMaskExcludeClientVersionAndHigher(int Version)
+{
+	int64_t Mask = 0;
+	for(int i = 0; i < MAX_CLIENTS; ++i)
+	{
+		if(GetClientVersion(i) >= Version)
+			continue;
+		Mask |= 1LL << i;
+	}
+	return Mask;
 }
 
 bool CGameContext::PlayerModerating() const

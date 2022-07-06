@@ -9,25 +9,33 @@
 #include <base/hash.h>
 #include <engine/client.h>
 #include <engine/client/checksum.h>
-#include <engine/client/demoedit.h>
 #include <engine/client/friends.h>
 #include <engine/client/ghost.h>
 #include <engine/client/serverbrowser.h>
 #include <engine/client/updater.h>
-#include <engine/discord.h>
 #include <engine/editor.h>
 #include <engine/engine.h>
 #include <engine/graphics.h>
-#include <engine/input.h>
-#include <engine/map.h>
 #include <engine/shared/config.h>
 #include <engine/shared/demo.h>
 #include <engine/shared/fifo.h>
 #include <engine/shared/http.h>
 #include <engine/shared/network.h>
-#include <engine/sound.h>
-#include <engine/steam.h>
 #include <engine/warning.h>
+
+class CDemoEdit;
+class IDemoRecorder;
+class CMsgPacker;
+class CUnpacker;
+class IConfigManager;
+class IDiscord;
+class IEngineInput;
+class IEngineMap;
+class IEngineSound;
+class IFriends;
+class ISteam;
+class IStorage;
+class IUpdater;
 
 #define CONNECTLINK "ddnet:"
 
@@ -112,21 +120,16 @@ class CClient : public IClient, public CDemoPlayer::IListener
 	IDiscord *m_pDiscord;
 	ISteam *m_pSteam;
 
-	enum
-	{
-		NUM_SNAPSHOT_TYPES = 2,
-	};
-
-	class CNetClient m_NetClient[NUM_CONNS];
-	class CDemoPlayer m_DemoPlayer;
-	class CDemoRecorder m_DemoRecorder[RECORDER_MAX];
-	class CDemoEditor m_DemoEditor;
-	class CGhostRecorder m_GhostRecorder;
-	class CGhostLoader m_GhostLoader;
-	class CServerBrowser m_ServerBrowser;
-	class CUpdater m_Updater;
-	class CFriends m_Friends;
-	class CFriends m_Foes;
+	CNetClient m_NetClient[NUM_CONNS];
+	CDemoPlayer m_DemoPlayer;
+	CDemoRecorder m_DemoRecorder[RECORDER_MAX];
+	CDemoEditor m_DemoEditor;
+	CGhostRecorder m_GhostRecorder;
+	CGhostLoader m_GhostLoader;
+	CServerBrowser m_ServerBrowser;
+	CUpdater m_Updater;
+	CFriends m_Friends;
+	CFriends m_Foes;
 
 	char m_aConnectAddressStr[256];
 
@@ -135,7 +138,7 @@ class CClient : public IClient, public CDemoPlayer::IListener
 	bool m_HaveGlobalTcpAddr = false;
 	NETADDR m_GlobalTcpAddr;
 
-	unsigned m_SnapshotParts[NUM_DUMMIES];
+	uint64_t m_SnapshotParts[NUM_DUMMIES];
 	int64_t m_LocalStartTime;
 
 	IGraphics::CTextureHandle m_DebugFont;
@@ -227,16 +230,17 @@ class CClient : public IClient, public CDemoPlayer::IListener
 	CGraph m_FpsGraph;
 
 	// the game snapshots are modifiable by the game
-	class CSnapshotStorage m_SnapshotStorage[NUM_DUMMIES];
+	CSnapshotStorage m_SnapshotStorage[NUM_DUMMIES];
 	CSnapshotStorage::CHolder *m_aSnapshots[NUM_DUMMIES][NUM_SNAPSHOT_TYPES];
 
 	int m_ReceivedSnapshots[NUM_DUMMIES];
-	char m_aSnapshotIncomingData[CSnapshot::MAX_SIZE];
+	char m_aSnapshotIncomingData[NUM_DUMMIES][CSnapshot::MAX_SIZE];
+	int m_SnapshotIncomingDataSize[NUM_DUMMIES];
 
-	class CSnapshotStorage::CHolder m_aDemorecSnapshotHolders[NUM_SNAPSHOT_TYPES];
+	CSnapshotStorage::CHolder m_aDemorecSnapshotHolders[NUM_SNAPSHOT_TYPES];
 	char *m_aDemorecSnapshotData[NUM_SNAPSHOT_TYPES][2][CSnapshot::MAX_SIZE];
 
-	class CSnapshotDelta m_SnapshotDelta;
+	CSnapshotDelta m_SnapshotDelta;
 
 	std::list<std::shared_ptr<CDemoEdit>> m_EditJobs;
 
@@ -247,7 +251,7 @@ class CClient : public IClient, public CDemoPlayer::IListener
 
 	bool ShouldSendChatTimeoutCodeHeuristic();
 
-	class CServerInfo m_CurrentServerInfo;
+	CServerInfo m_CurrentServerInfo;
 	int64_t m_CurrentServerInfoRequestTime; // >= 0 should request, == -1 got info
 
 	int m_CurrentServerPingInfoType;
@@ -336,7 +340,7 @@ public:
 	const char *LatestVersion() const override;
 
 	// ------ state handling -----
-	void SetState(int s);
+	void SetState(EClientState s);
 
 	// called when the map is loaded and we should init for a new round
 	void OnEnterGame(bool Dummy);
@@ -385,6 +389,8 @@ public:
 	void ProcessConnlessPacket(CNetChunk *pPacket);
 	void ProcessServerInfo(int Type, NETADDR *pFrom, const void *pData, int DataSize);
 	void ProcessServerPacket(CNetChunk *pPacket, int Conn, bool Dummy);
+
+	int UnpackAndValidateSnapshot(CSnapshot *pFrom, CSnapshot *pTo);
 
 	void ResetMapDownload();
 	void FinishMapDownload();
@@ -470,7 +476,7 @@ public:
 	void DemoRecorder_StartReplayRecorder();
 	void DemoRecorder_Stop(int Recorder, bool RemoveFile = false) override;
 	void DemoRecorder_AddDemoMarker(int Recorder);
-	class IDemoRecorder *DemoRecorder(int Recorder) override;
+	IDemoRecorder *DemoRecorder(int Recorder) override;
 
 	void AutoScreenshot_Start() override;
 	void AutoStatScreenshot_Start() override;

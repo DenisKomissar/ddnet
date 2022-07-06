@@ -38,7 +38,7 @@ void CSaveTee::Save(CCharacter *pChr)
 	m_Jetpack = pChr->m_Jetpack;
 	m_NinjaJetpack = pChr->m_NinjaJetpack;
 	m_FreezeTime = pChr->m_FreezeTime;
-	m_FreezeTick = pChr->Server()->Tick() - pChr->m_Core.m_FreezeTick;
+	m_FreezeStart = pChr->Server()->Tick() - pChr->m_Core.m_FreezeStart;
 
 	m_DeepFreeze = pChr->m_DeepFreeze;
 	m_LiveFreeze = pChr->m_LiveFreeze;
@@ -133,7 +133,7 @@ void CSaveTee::Load(CCharacter *pChr, int Team, bool IsSwap)
 	pChr->m_Jetpack = m_Jetpack;
 	pChr->m_NinjaJetpack = m_NinjaJetpack;
 	pChr->m_FreezeTime = m_FreezeTime;
-	pChr->m_Core.m_FreezeTick = pChr->Server()->Tick() - m_FreezeTick;
+	pChr->m_Core.m_FreezeStart = pChr->Server()->Tick() - m_FreezeStart;
 
 	pChr->m_DeepFreeze = m_DeepFreeze;
 	pChr->m_LiveFreeze = m_LiveFreeze;
@@ -269,7 +269,7 @@ char *CSaveTee::GetString(const CSaveTeam *pTeam)
 		m_aWeapons[5].m_AmmoRegenStart, m_aWeapons[5].m_Ammo, m_aWeapons[5].m_Ammocost, m_aWeapons[5].m_Got,
 		m_LastWeapon, m_QueuedWeapon,
 		// tee states
-		m_SuperJump, m_Jetpack, m_NinjaJetpack, m_FreezeTime, m_FreezeTick, m_DeepFreeze, m_EndlessHook,
+		m_SuperJump, m_Jetpack, m_NinjaJetpack, m_FreezeTime, m_FreezeStart, m_DeepFreeze, m_EndlessHook,
 		m_DDRaceState, m_Hit, m_Collision, m_TuneZone, m_TuneZoneOld, m_Hook, m_Time,
 		(int)m_Pos.x, (int)m_Pos.y, (int)m_PrevPos.x, (int)m_PrevPos.y,
 		m_TeleCheckpoint, m_LastPenalty,
@@ -342,7 +342,7 @@ int CSaveTee::FromString(const char *String)
 		&m_aWeapons[5].m_AmmoRegenStart, &m_aWeapons[5].m_Ammo, &m_aWeapons[5].m_Ammocost, &m_aWeapons[5].m_Got,
 		&m_LastWeapon, &m_QueuedWeapon,
 		// tee states
-		&m_SuperJump, &m_Jetpack, &m_NinjaJetpack, &m_FreezeTime, &m_FreezeTick, &m_DeepFreeze, &m_EndlessHook,
+		&m_SuperJump, &m_Jetpack, &m_NinjaJetpack, &m_FreezeTime, &m_FreezeStart, &m_DeepFreeze, &m_EndlessHook,
 		&m_DDRaceState, &m_Hit, &m_Collision, &m_TuneZone, &m_TuneZoneOld, &m_Hook, &m_Time,
 		&m_Pos.x, &m_Pos.y, &m_PrevPos.x, &m_PrevPos.y,
 		&m_TeleCheckpoint, &m_LastPenalty,
@@ -369,13 +369,13 @@ int CSaveTee::FromString(const char *String)
 	{
 	case 96:
 		m_NotEligibleForFinish = false;
-		// fall through
+		[[fallthrough]];
 	case 97:
 		m_HasTelegunGrenade = 0;
 		m_HasTelegunLaser = 0;
 		m_HasTelegunGun = 0;
 		FormatUuid(CalculateUuid("game-uuid-nonexistent@ddnet.tw"), m_aGameUuid, sizeof(m_aGameUuid));
-		// fall through
+		[[fallthrough]];
 	case 101:
 		m_HookedPlayer = -1;
 		m_NewHook = false;
@@ -386,13 +386,13 @@ int CSaveTee::FromString(const char *String)
 		m_InputFire = 0;
 		m_InputHook = 0;
 		m_ReloadTimer = 0;
-		// fall through
+		[[fallthrough]];
 	case 108:
 		m_TeeStarted = true;
-		// fall through
+		[[fallthrough]];
 	case 109:
 		m_LiveFreeze = 0;
-		// fall through
+		[[fallthrough]];
 	case 110:
 		return 0;
 	default:
@@ -613,7 +613,7 @@ int CSaveTeam::FromString(const char *String)
 		{
 		case 4:
 			m_Practice = false;
-			// fallthrough
+			[[fallthrough]];
 		case 5:
 			break;
 		default:

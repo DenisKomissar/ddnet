@@ -1,5 +1,8 @@
 #include "backend_opengl.h"
-#include "engine/graphics.h"
+
+#include <engine/graphics.h>
+
+#include <engine/client/backend_sdl.h>
 
 #include <base/detect.h>
 
@@ -11,7 +14,7 @@
 
 #include <engine/client/backend/glsl_shader_compiler.h>
 
-#include <engine/shared/image_manipulation.h>
+#include <engine/gfx/image_manipulation.h>
 
 #ifndef BACKEND_AS_OPENGL_ES
 #include <GL/glew.h>
@@ -535,6 +538,8 @@ bool CCommandProcessorFragment_OpenGL::InitOpenGL(const SCommand_Init *pCommand)
 			pCommand->m_pCapabilities->m_3DTextures = false;
 			pCommand->m_pCapabilities->m_2DArrayTextures = false;
 			pCommand->m_pCapabilities->m_NPOTTextures = false;
+
+			pCommand->m_pCapabilities->m_TrianglesAsQuads = false;
 		}
 		else
 		{
@@ -548,6 +553,8 @@ bool CCommandProcessorFragment_OpenGL::InitOpenGL(const SCommand_Init *pCommand)
 			pCommand->m_pCapabilities->m_3DTextures = true;
 			pCommand->m_pCapabilities->m_2DArrayTextures = true;
 			pCommand->m_pCapabilities->m_NPOTTextures = true;
+
+			pCommand->m_pCapabilities->m_TrianglesAsQuads = true;
 		}
 	}
 
@@ -1133,19 +1140,6 @@ void CCommandProcessorFragment_OpenGL2::UseProgram(CGLSLTWProgram *pProgram)
 	pProgram->UseProgram();
 }
 
-bool CCommandProcessorFragment_OpenGL2::IsAndUpdateTextureSlotBound(int IDX, int Slot, bool Is2DArray)
-{
-	if(m_vTextureSlotBoundToUnit[IDX].m_TextureSlot == Slot && m_vTextureSlotBoundToUnit[IDX].m_Is2DArray == Is2DArray)
-		return true;
-	else
-	{
-		// the texture slot uses this index now
-		m_vTextureSlotBoundToUnit[IDX].m_TextureSlot = Slot;
-		m_vTextureSlotBoundToUnit[IDX].m_Is2DArray = Is2DArray;
-		return false;
-	}
-}
-
 void CCommandProcessorFragment_OpenGL2::SetState(const CCommandBuffer::SState &State, CGLSLTWProgram *pProgram, bool Use2DArrayTextures)
 {
 	if(m_LastBlendMode == CCommandBuffer::BLEND_NONE)
@@ -1210,55 +1204,31 @@ void CCommandProcessorFragment_OpenGL2::SetState(const CCommandBuffer::SState &S
 	if(IsTexturedState(State))
 	{
 		int Slot = 0;
-		if(m_UseMultipleTextureUnits)
+		if(!Use2DArrayTextures)
 		{
-			Slot = State.m_Texture % m_MaxTextureUnits;
-			if(!IsAndUpdateTextureSlotBound(Slot, State.m_Texture, Use2DArrayTextures))
-			{
-				glActiveTexture(GL_TEXTURE0 + Slot);
-				if(!Use2DArrayTextures)
-				{
-					glBindTexture(GL_TEXTURE_2D, m_vTextures[State.m_Texture].m_Tex);
-					if(IsNewApi())
-						glBindSampler(Slot, m_vTextures[State.m_Texture].m_Sampler);
-				}
-				else
-				{
-					glBindTexture(GL_TEXTURE_2D_ARRAY, m_vTextures[State.m_Texture].m_Tex2DArray);
-					if(IsNewApi())
-						glBindSampler(Slot, m_vTextures[State.m_Texture].m_Sampler2DArray);
-				}
-			}
+			if(!IsNewApi() && !m_HasShaders)
+				glEnable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, m_vTextures[State.m_Texture].m_Tex);
+			if(IsNewApi())
+				glBindSampler(Slot, m_vTextures[State.m_Texture].m_Sampler);
 		}
 		else
 		{
-			Slot = 0;
-			if(!Use2DArrayTextures)
+			if(!m_Has2DArrayTextures)
 			{
 				if(!IsNewApi() && !m_HasShaders)
-					glEnable(GL_TEXTURE_2D);
-				glBindTexture(GL_TEXTURE_2D, m_vTextures[State.m_Texture].m_Tex);
+					glEnable(GL_TEXTURE_3D);
+				glBindTexture(GL_TEXTURE_3D, m_vTextures[State.m_Texture].m_Tex2DArray);
 				if(IsNewApi())
-					glBindSampler(Slot, m_vTextures[State.m_Texture].m_Sampler);
+					glBindSampler(Slot, m_vTextures[State.m_Texture].m_Sampler2DArray);
 			}
 			else
 			{
-				if(!m_Has2DArrayTextures)
-				{
-					if(!IsNewApi() && !m_HasShaders)
-						glEnable(GL_TEXTURE_3D);
-					glBindTexture(GL_TEXTURE_3D, m_vTextures[State.m_Texture].m_Tex2DArray);
-					if(IsNewApi())
-						glBindSampler(Slot, m_vTextures[State.m_Texture].m_Sampler2DArray);
-				}
-				else
-				{
-					if(!IsNewApi() && !m_HasShaders)
-						glEnable(m_2DArrayTarget);
-					glBindTexture(m_2DArrayTarget, m_vTextures[State.m_Texture].m_Tex2DArray);
-					if(IsNewApi())
-						glBindSampler(Slot, m_vTextures[State.m_Texture].m_Sampler2DArray);
-				}
+				if(!IsNewApi() && !m_HasShaders)
+					glEnable(m_2DArrayTarget);
+				glBindTexture(m_2DArrayTarget, m_vTextures[State.m_Texture].m_Tex2DArray);
+				if(IsNewApi())
+					glBindSampler(Slot, m_vTextures[State.m_Texture].m_Sampler2DArray);
 			}
 		}
 
@@ -1816,6 +1786,8 @@ void CCommandProcessorFragment_OpenGL2::Cmd_Shutdown(const SCommand_Shutdown *pC
 	delete m_pTileProgramTextured;
 	delete m_pPrimitive3DProgram;
 	delete m_pPrimitive3DProgramTextured;
+	for(auto &BufferObject : m_vBufferObjectIndices)
+		free(BufferObject.m_pData);
 }
 
 void CCommandProcessorFragment_OpenGL2::Cmd_RenderTex3D(const CCommandBuffer::SCommand_RenderTex3D *pCommand)

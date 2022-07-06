@@ -30,10 +30,7 @@ CGameWorld::CGameWorld()
 
 CGameWorld::~CGameWorld()
 {
-	// delete all entities
-	for(auto &pFirstEntityType : m_apFirstEntityTypes)
-		while(pFirstEntityType)
-			delete pFirstEntityType;
+	Clear();
 	if(m_pChild && m_pChild->m_pParent == this)
 	{
 		OnModified();
@@ -143,9 +140,18 @@ void CGameWorld::RemoveEntity(CEntity *pEnt)
 	pEnt->m_pNextTypeEntity = 0;
 	pEnt->m_pPrevTypeEntity = 0;
 
-	if(m_IsValidCopy && m_pParent && m_pParent->m_pChild == this && pEnt->m_pParent)
-		pEnt->m_pParent->m_DestroyTick = GameTick();
-	pEnt->m_pParent = 0;
+	if(pEnt->m_pParent)
+	{
+		if(m_IsValidCopy && m_pParent && m_pParent->m_pChild == this)
+			pEnt->m_pParent->m_DestroyTick = GameTick();
+		pEnt->m_pParent->m_pChild = nullptr;
+		pEnt->m_pParent = nullptr;
+	}
+	if(pEnt->m_pChild)
+	{
+		pEnt->m_pChild->m_pParent = nullptr;
+		pEnt->m_pChild = nullptr;
+	}
 }
 
 void CGameWorld::RemoveCharacter(CCharacter *pChar)
@@ -365,17 +371,17 @@ void CGameWorld::NetObjBegin()
 	OnModified();
 }
 
-void CGameWorld::NetCharAdd(int ObjID, CNetObj_Character *pCharObj, CNetObj_DDNetCharacter *pExtended, CNetObj_DDNetCharacterDisplayInfo *pExtendedDisplayInfo, int GameTeam, bool IsLocal)
+void CGameWorld::NetCharAdd(int ObjID, CNetObj_Character *pCharObj, CNetObj_DDNetCharacter *pExtended, int GameTeam, bool IsLocal)
 {
 	CCharacter *pChar;
 	if((pChar = (CCharacter *)GetEntity(ObjID, ENTTYPE_CHARACTER)))
 	{
-		pChar->Read(pCharObj, pExtended, pExtendedDisplayInfo, IsLocal);
+		pChar->Read(pCharObj, pExtended, IsLocal);
 		pChar->Keep();
 	}
 	else
 	{
-		pChar = new CCharacter(this, ObjID, pCharObj, pExtended, pExtendedDisplayInfo);
+		pChar = new CCharacter(this, ObjID, pCharObj, pExtended);
 		InsertEntity(pChar);
 	}
 
@@ -553,9 +559,7 @@ void CGameWorld::CopyWorld(CGameWorld *pFrom)
 	m_Teams = pFrom->m_Teams;
 	m_Core.m_vSwitchers = pFrom->m_Core.m_vSwitchers;
 	// delete the previous entities
-	for(auto &pFirstEntityType : m_apFirstEntityTypes)
-		while(pFirstEntityType)
-			delete pFirstEntityType;
+	Clear();
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
 		m_apCharacters[i] = 0;
@@ -578,6 +582,7 @@ void CGameWorld::CopyWorld(CGameWorld *pFrom)
 			if(pCopy)
 			{
 				pCopy->m_pParent = pEnt;
+				pEnt->m_pChild = pCopy;
 				this->InsertEntity(pCopy);
 			}
 		}

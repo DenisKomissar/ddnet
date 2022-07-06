@@ -3,11 +3,17 @@
 #include "player.h"
 #include <engine/shared/config.h>
 
+#include <engine/antibot.h>
+#include <engine/server.h>
+
 #include "base/system.h"
 #include "entities/character.h"
 #include "gamecontext.h"
-#include <engine/server.h>
+#include "gamecontroller.h"
+#include "score.h"
+
 #include <game/gamecore.h>
+#include <game/teamscore.h>
 #include <game/version.h>
 
 MACRO_ALLOC_POOL_ID_IMPL(CPlayer, MAX_CLIENTS)
@@ -139,19 +145,6 @@ void CPlayer::Reset()
 	m_EligibleForFinishCheck = 0;
 	m_VotedForPractice = false;
 	m_SwapTargetsClientID = -1;
-}
-
-static int PlayerFlags_SevenToSix(int Flags)
-{
-	int Six = 0;
-	if(Flags & protocol7::PLAYERFLAG_CHATTING)
-		Six |= PLAYERFLAG_CHATTING;
-	if(Flags & protocol7::PLAYERFLAG_SCOREBOARD)
-		Six |= PLAYERFLAG_SCOREBOARD;
-	if(Flags & protocol7::PLAYERFLAG_AIM)
-		Six |= PLAYERFLAG_AIM;
-
-	return Six;
 }
 
 static int PlayerFlags_SixToSeven(int Flags)
@@ -520,11 +513,7 @@ void CPlayer::OnPredictedInput(CNetObj_PlayerInput *NewInput)
 
 void CPlayer::OnDirectInput(CNetObj_PlayerInput *NewInput)
 {
-	if(Server()->IsSixup(m_ClientID))
-		NewInput->m_PlayerFlags = PlayerFlags_SevenToSix(NewInput->m_PlayerFlags);
-
-	if(NewInput->m_PlayerFlags)
-		Server()->SetClientFlags(m_ClientID, NewInput->m_PlayerFlags);
+	Server()->SetClientFlags(m_ClientID, NewInput->m_PlayerFlags);
 
 	AfkTimer();
 
@@ -772,7 +761,7 @@ int CPlayer::Pause(int State, bool Force)
 				m_ViewPos = m_pCharacter->m_Pos;
 				GameServer()->CreatePlayerSpawn(m_pCharacter->m_Pos, GameServer()->m_pController->GetMaskForPlayerWorldEvent(m_ClientID));
 			}
-			// fall-thru
+			[[fallthrough]];
 		case PAUSE_SPEC:
 			if(g_Config.m_SvPauseMessages)
 			{

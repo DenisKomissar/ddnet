@@ -1,13 +1,18 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <antibot/antibot_data.h>
+
+#include <engine/antibot.h>
+
 #include <engine/shared/config.h>
 #include <game/generated/server_data.h>
 #include <game/mapitems.h>
 #include <game/server/gamecontext.h>
+#include <game/server/gamecontroller.h>
 #include <game/server/player.h>
 
 #include "character.h"
+#include "game/generated/protocol.h"
 #include "laser.h"
 #include "projectile.h"
 
@@ -203,7 +208,7 @@ void CCharacter::HandleNinja()
 
 	if(NinjaTime % Server()->TickSpeed() == 0 && NinjaTime / Server()->TickSpeed() <= 5)
 	{
-		GameServer()->CreateDamageInd(m_Pos, 0, NinjaTime / Server()->TickSpeed(), TeamMask());
+		GameServer()->CreateDamageInd(m_Pos, 0, NinjaTime / Server()->TickSpeed(), TeamMask() & GameServer()->ClientsMaskExcludeClientVersionAndHigher(VERSION_DDNET_NEW_HUD));
 	}
 
 	m_Armor = clamp(10 - (NinjaTime / 15), 0, 10);
@@ -268,7 +273,7 @@ void CCharacter::HandleNinja()
 				if(distance(aEnts[i]->m_Pos, m_Pos) > (GetProximityRadius() * 2.0f))
 					continue;
 
-				// Hit a player, give him damage and stuffs...
+				// Hit a player, give them damage and stuffs...
 				GameServer()->CreateSound(aEnts[i]->m_Pos, SOUND_NINJA_HIT, TeamMask());
 				// set his velocity to fast upward (for now)
 				if(m_NumObjectsHit < 10)
@@ -914,6 +919,9 @@ bool CCharacter::TakeDamage(vec2 Force, int Dmg, int From, int Weapon)
 //TODO: Move the emote stuff to a function
 void CCharacter::SnapCharacter(int SnappingClient, int ID)
 {
+	int SnappingClientVersion = SnappingClient != SERVER_DEMO_CLIENT ?
+					    GameServer()->GetClientVersion(SnappingClient) :
+					    CLIENT_VERSIONNR;
 	CCharacterCore *pCore;
 	int Tick, Emote = m_EmoteType, Weapon = m_Core.m_ActiveWeapon, AmmoCount = 0,
 		  Health = 0, Armor = 0;
@@ -934,7 +942,7 @@ void CCharacter::SnapCharacter(int SnappingClient, int ID)
 		if(Emote == EMOTE_NORMAL)
 			Emote = (m_DeepFreeze || m_LiveFreeze) ? EMOTE_PAIN : EMOTE_BLINK;
 
-		if(m_DeepFreeze || m_FreezeTime > 0 || m_FreezeTime == -1)
+		if((m_DeepFreeze || m_FreezeTime > 0 || m_FreezeTime == -1) && SnappingClientVersion < VERSION_DDNET_NEW_HUD)
 			Weapon = WEAPON_NINJA;
 	}
 
@@ -961,7 +969,8 @@ void CCharacter::SnapCharacter(int SnappingClient, int ID)
 	}
 
 	// change eyes, use ninja graphic and set ammo count if player has ninjajetpack
-	if(m_pPlayer->m_NinjaJetpack && m_Jetpack && m_Core.m_ActiveWeapon == WEAPON_GUN && !m_DeepFreeze && !(m_FreezeTime > 0 || m_FreezeTime == -1) && !m_Core.m_HasTelegunGun)
+	if(m_pPlayer->m_NinjaJetpack && m_Jetpack && m_Core.m_ActiveWeapon == WEAPON_GUN && !m_DeepFreeze &&
+		!(m_FreezeTime > 0 || m_FreezeTime == -1) && !m_Core.m_HasTelegunGun)
 	{
 		if(Emote == EMOTE_NORMAL)
 			Emote = EMOTE_HAPPY;
@@ -1037,7 +1046,7 @@ void CCharacter::SnapCharacter(int SnappingClient, int ID)
 		pCharacter->m_AmmoCount = AmmoCount;
 
 		if(m_FreezeTime > 0 || m_FreezeTime == -1 || m_DeepFreeze)
-			pCharacter->m_AmmoCount = m_Core.m_FreezeTick + g_Config.m_SvFreezeDelay * Server()->TickSpeed();
+			pCharacter->m_AmmoCount = m_Core.m_FreezeStart + g_Config.m_SvFreezeDelay * Server()->TickSpeed();
 		else if(Weapon == WEAPON_NINJA)
 			pCharacter->m_AmmoCount = m_Core.m_Ninja.m_ActivationTick + g_pData->m_Weapons.m_Ninja.m_Duration * Server()->TickSpeed() / 1000;
 
@@ -1151,26 +1160,27 @@ void CCharacter::Snap(int SnappingClient)
 	if(m_Core.m_ActiveWeapon == WEAPON_NINJA)
 		pDDNetCharacter->m_Flags |= CHARACTERFLAG_WEAPON_NINJA;
 	if(m_Core.m_LiveFrozen)
-	{
 		pDDNetCharacter->m_Flags |= CHARACTERFLAG_NO_MOVEMENTS;
-	}
 
 	pDDNetCharacter->m_FreezeEnd = m_DeepFreeze ? -1 : m_FreezeTime == 0 ? 0 : Server()->Tick() + m_FreezeTime;
 	pDDNetCharacter->m_Jumps = m_Core.m_Jumps;
 	pDDNetCharacter->m_TeleCheckpoint = m_TeleCheckpoint;
 	pDDNetCharacter->m_StrongWeakID = m_StrongWeakID;
 
-	CNetObj_DDNetCharacterDisplayInfo *pDDNetCharacterDisplayInfo = static_cast<CNetObj_DDNetCharacterDisplayInfo *>(Server()->SnapNewItem(NETOBJTYPE_DDNETCHARACTERDISPLAYINFO, ID, sizeof(CNetObj_DDNetCharacterDisplayInfo)));
-	if(!pDDNetCharacterDisplayInfo)
-		return;
-	pDDNetCharacterDisplayInfo->m_JumpedTotal = m_Core.m_JumpedTotal;
-	pDDNetCharacterDisplayInfo->m_NinjaActivationTick = m_Core.m_Ninja.m_ActivationTick;
-	pDDNetCharacterDisplayInfo->m_FreezeTick = m_Core.m_FreezeTick;
-	pDDNetCharacterDisplayInfo->m_IsInFreeze = m_Core.m_IsInFreeze;
-	pDDNetCharacterDisplayInfo->m_IsInPracticeMode = Teams()->IsPractice(Team());
-	pDDNetCharacterDisplayInfo->m_TargetX = m_Core.m_Input.m_TargetX;
-	pDDNetCharacterDisplayInfo->m_TargetY = m_Core.m_Input.m_TargetY;
-	pDDNetCharacterDisplayInfo->m_RampValue = round_to_int(VelocityRamp(length(m_Core.m_Vel) * 50, m_Core.m_Tuning.m_VelrampStart, m_Core.m_Tuning.m_VelrampRange, m_Core.m_Tuning.m_VelrampCurvature) * 1000.0f);
+	// Display Informations
+	pDDNetCharacter->m_JumpedTotal = m_Core.m_JumpedTotal;
+	pDDNetCharacter->m_NinjaActivationTick = m_Core.m_Ninja.m_ActivationTick;
+	pDDNetCharacter->m_FreezeStart = m_Core.m_FreezeStart;
+	if(m_Core.m_IsInFreeze)
+	{
+		pDDNetCharacter->m_Flags |= CHARACTERFLAG_IN_FREEZE;
+	}
+	if(Teams()->IsPractice(Team()))
+	{
+		pDDNetCharacter->m_Flags |= CHARACTERFLAG_PRACTICE_MODE;
+	}
+	pDDNetCharacter->m_TargetX = m_Core.m_Input.m_TargetX;
+	pDDNetCharacter->m_TargetY = m_Core.m_Input.m_TargetY;
 }
 
 // DDRace
@@ -1558,33 +1568,39 @@ void CCharacter::HandleTiles(int Index)
 	if(((m_TileIndex == TILE_TELE_GUN_ENABLE) || (m_TileFIndex == TILE_TELE_GUN_ENABLE)) && !m_Core.m_HasTelegunGun)
 	{
 		m_Core.m_HasTelegunGun = true;
+
 		GameServer()->SendChatTarget(GetPlayer()->GetCID(), "Teleport gun enabled");
 	}
 	else if(((m_TileIndex == TILE_TELE_GUN_DISABLE) || (m_TileFIndex == TILE_TELE_GUN_DISABLE)) && m_Core.m_HasTelegunGun)
 	{
 		m_Core.m_HasTelegunGun = false;
+
 		GameServer()->SendChatTarget(GetPlayer()->GetCID(), "Teleport gun disabled");
 	}
 
 	if(((m_TileIndex == TILE_TELE_GRENADE_ENABLE) || (m_TileFIndex == TILE_TELE_GRENADE_ENABLE)) && !m_Core.m_HasTelegunGrenade)
 	{
 		m_Core.m_HasTelegunGrenade = true;
+
 		GameServer()->SendChatTarget(GetPlayer()->GetCID(), "Teleport grenade enabled");
 	}
 	else if(((m_TileIndex == TILE_TELE_GRENADE_DISABLE) || (m_TileFIndex == TILE_TELE_GRENADE_DISABLE)) && m_Core.m_HasTelegunGrenade)
 	{
 		m_Core.m_HasTelegunGrenade = false;
+
 		GameServer()->SendChatTarget(GetPlayer()->GetCID(), "Teleport grenade disabled");
 	}
 
 	if(((m_TileIndex == TILE_TELE_LASER_ENABLE) || (m_TileFIndex == TILE_TELE_LASER_ENABLE)) && !m_Core.m_HasTelegunLaser)
 	{
 		m_Core.m_HasTelegunLaser = true;
+
 		GameServer()->SendChatTarget(GetPlayer()->GetCID(), "Teleport laser enabled");
 	}
 	else if(((m_TileIndex == TILE_TELE_LASER_DISABLE) || (m_TileFIndex == TILE_TELE_LASER_DISABLE)) && m_Core.m_HasTelegunLaser)
 	{
 		m_Core.m_HasTelegunLaser = false;
+
 		GameServer()->SendChatTarget(GetPlayer()->GetCID(), "Teleport laser disabled");
 	}
 
@@ -1987,7 +2003,7 @@ void CCharacter::SetRescue()
 void CCharacter::DDRaceTick()
 {
 	mem_copy(&m_Input, &m_SavedInput, sizeof(m_Input));
-	m_Armor = (m_FreezeTime >= 0) ? 10 - (m_FreezeTime / 15) : 0;
+	m_Armor = (m_FreezeTime >= 0) ? clamp(10 - (m_FreezeTime / 15), 0, 10) : 0;
 	if(m_Input.m_Direction != 0 || m_Input.m_Jump != 0)
 		m_LastMove = Server()->Tick();
 
@@ -2001,7 +2017,7 @@ void CCharacter::DDRaceTick()
 	{
 		if(m_FreezeTime % Server()->TickSpeed() == Server()->TickSpeed() - 1 || m_FreezeTime == -1)
 		{
-			GameServer()->CreateDamageInd(m_Pos, 0, (m_FreezeTime + 1) / Server()->TickSpeed(), TeamMask());
+			GameServer()->CreateDamageInd(m_Pos, 0, (m_FreezeTime + 1) / Server()->TickSpeed(), TeamMask() & GameServer()->ClientsMaskExcludeClientVersionAndHigher(VERSION_DDNET_NEW_HUD));
 		}
 		if(m_FreezeTime > 0)
 			m_FreezeTime--;
@@ -2127,11 +2143,11 @@ bool CCharacter::Freeze(int Seconds)
 {
 	if((Seconds <= 0 || m_Super || m_FreezeTime == -1 || m_FreezeTime > Seconds * Server()->TickSpeed()) && Seconds != -1)
 		return false;
-	if(m_Core.m_FreezeTick < Server()->Tick() - Server()->TickSpeed() || Seconds == -1)
+	if(m_Core.m_FreezeStart < Server()->Tick() - Server()->TickSpeed() || Seconds == -1)
 	{
 		m_Armor = 0;
 		m_FreezeTime = Seconds == -1 ? Seconds : Seconds * Server()->TickSpeed();
-		m_Core.m_FreezeTick = Server()->Tick();
+		m_Core.m_FreezeStart = Server()->Tick();
 		return true;
 	}
 	return false;
@@ -2150,7 +2166,7 @@ bool CCharacter::UnFreeze()
 		if(!m_Core.m_aWeapons[m_Core.m_ActiveWeapon].m_Got)
 			m_Core.m_ActiveWeapon = WEAPON_GUN;
 		m_FreezeTime = 0;
-		m_Core.m_FreezeTick = 0;
+		m_Core.m_FreezeStart = 0;
 		m_FrozenLastTick = true;
 		return true;
 	}
@@ -2205,8 +2221,8 @@ void CCharacter::SetEndlessHook(bool Enable)
 	{
 		return;
 	}
-
 	GameServer()->SendChatTarget(GetPlayer()->GetCID(), Enable ? "Endless hook has been activated" : "Endless hook has been deactivated");
+
 	m_EndlessHook = Enable;
 	m_Core.m_EndlessHook = Enable;
 }

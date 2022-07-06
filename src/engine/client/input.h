@@ -3,9 +3,10 @@
 #ifndef ENGINE_CLIENT_INPUT_H
 #define ENGINE_CLIENT_INPUT_H
 
-#include <engine/graphics.h>
 #include <engine/input.h>
 #include <engine/keys.h>
+
+class IEngineGraphics;
 
 class CInput : public IEngineInput
 {
@@ -42,7 +43,6 @@ public:
 		int GetHatValue(int Hat) override;
 		bool Relative(float *pX, float *pY) override;
 		bool Absolute(float *pX, float *pY) override;
-		void Close();
 
 		static int GetJoystickHatKey(int Hat, int HatValue);
 	};
@@ -96,9 +96,9 @@ private:
 
 public:
 	CInput();
-	~CInput();
 
 	void Init() override;
+	void Shutdown() override;
 
 	bool ModifierIsPressed() const override { return KeyState(KEY_LCTRL) || KeyState(KEY_RCTRL) || KeyState(KEY_LGUI) || KeyState(KEY_RGUI); }
 	bool KeyIsPressed(int Key) const override { return KeyState(Key); }

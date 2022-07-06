@@ -12,14 +12,17 @@
 
 #include "backend_opengl.h"
 
+class CGLSLPrimitiveExProgram;
+class CGLSLQuadProgram;
+class CGLSLSpriteMultipleProgram;
+class CGLSLTextProgram;
+
 #define MAX_STREAM_BUFFER_COUNT 10
 
 // takes care of opengl 3.3+ related rendering
 class CCommandProcessorFragment_OpenGL3_3 : public CCommandProcessorFragment_OpenGL3
 {
 protected:
-	bool m_UsePreinitializedVertexBuffer;
-
 	int m_MaxQuadsAtOnce;
 	static const int m_MaxQuadsPossible = 256;
 

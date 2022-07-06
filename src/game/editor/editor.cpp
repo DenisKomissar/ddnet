@@ -12,6 +12,7 @@
 
 #include <engine/client.h>
 #include <engine/console.h>
+#include <engine/gfx/image_manipulation.h>
 #include <engine/graphics.h>
 #include <engine/input.h>
 #include <engine/keys.h>
@@ -25,8 +26,6 @@
 #include <game/client/ui.h>
 #include <game/generated/client_data.h>
 #include <game/localization.h>
-
-#include <engine/shared/image_manipulation.h>
 
 #include "auto_map.h"
 #include "editor.h"
@@ -1363,8 +1362,7 @@ void CEditor::DoQuad(CQuad *pQuad, int Index)
 	if(dx * dx + dy * dy < 50)
 		UI()->SetHotItem(pID);
 
-	bool IgnoreGrid;
-	IgnoreGrid = Input()->KeyIsPressed(KEY_LALT) || Input()->KeyIsPressed(KEY_RALT);
+	const bool IgnoreGrid = Input()->KeyIsPressed(KEY_LALT) || Input()->KeyIsPressed(KEY_RALT);
 
 	// draw selection background
 	if(IsQuadSelected(Index))
@@ -1624,8 +1622,7 @@ void CEditor::DoQuadPoint(CQuad *pQuad, int QuadIndex, int V)
 	static bool s_Moved;
 	static int s_Operation = OP_NONE;
 
-	bool IgnoreGrid;
-	IgnoreGrid = Input()->KeyIsPressed(KEY_LALT) || Input()->KeyIsPressed(KEY_RALT);
+	const bool IgnoreGrid = Input()->KeyIsPressed(KEY_LALT) || Input()->KeyIsPressed(KEY_RALT);
 
 	if(UI()->CheckActiveItem(pID))
 	{
@@ -2155,8 +2152,7 @@ void CEditor::DoQuadEnvelopes(const std::vector<CQuad> &vQuads, IGraphics::CText
 		if(!apEnvelope[j])
 			continue;
 
-		//QuadParams
-		for(size_t i = 0; i < apEnvelope[j]->m_vPoints.size() - 1; i++)
+		for(size_t i = 0; i < apEnvelope[j]->m_vPoints.size(); i++)
 			DoQuadEnvPoint(&vQuads[j], j, i);
 	}
 	Graphics()->QuadsEnd();
@@ -2173,6 +2169,8 @@ void CEditor::DoQuadEnvPoint(const CQuad *pQuad, int QIndex, int PIndex)
 	};
 
 	// some basic values
+	static float s_LastWx = 0;
+	static float s_LastWy = 0;
 	static int s_Operation = OP_NONE;
 	float wx = UI()->MouseWorldX();
 	float wy = UI()->MouseWorldY();
@@ -2192,8 +2190,7 @@ void CEditor::DoQuadEnvPoint(const CQuad *pQuad, int QIndex, int PIndex)
 		s_CurQIndex = QIndex;
 	}
 
-	bool IgnoreGrid;
-	IgnoreGrid = Input()->KeyIsPressed(KEY_LALT) || Input()->KeyIsPressed(KEY_RALT);
+	const bool IgnoreGrid = Input()->KeyIsPressed(KEY_LALT) || Input()->KeyIsPressed(KEY_RALT);
 
 	if(UI()->CheckActiveItem(pID) && s_CurQIndex == QIndex)
 	{
@@ -2219,12 +2216,15 @@ void CEditor::DoQuadEnvPoint(const CQuad *pQuad, int QIndex, int PIndex)
 			}
 			else
 			{
-				pEnvelope->m_vPoints[PIndex].m_aValues[0] = f2fx(wx);
-				pEnvelope->m_vPoints[PIndex].m_aValues[1] = f2fx(wy);
+				pEnvelope->m_vPoints[PIndex].m_aValues[0] += f2fx(wx - s_LastWx);
+				pEnvelope->m_vPoints[PIndex].m_aValues[1] += f2fx(wy - s_LastWy);
 			}
 		}
 		else if(s_Operation == OP_ROTATE)
 			pEnvelope->m_vPoints[PIndex].m_aValues[2] += 10 * m_MouseDeltaX;
+
+		s_LastWx = wx;
+		s_LastWy = wy;
 
 		if(!UI()->MouseButton(0))
 		{
@@ -2262,6 +2262,9 @@ void CEditor::DoQuadEnvPoint(const CQuad *pQuad, int QIndex, int PIndex)
 			m_SelectedQuadEnvelope = pQuad->m_PosEnv;
 
 			UI()->SetActiveItem(pID);
+
+			s_LastWx = wx;
+			s_LastWy = wy;
 		}
 		else
 		{
@@ -4326,12 +4329,7 @@ void CEditor::AddFileDialogEntry(int Index, CUIRect *pView)
 	Button.VSplitLeft(Button.h, &FileIcon, &Button);
 	Button.VSplitLeft(5.0f, nullptr, &Button);
 
-	Graphics()->TextureSet(g_pData->m_aImages[IMAGE_FILEICONS].m_Id);
-	Graphics()->QuadsBegin();
-	RenderTools()->SelectSprite(m_vFileList[Index].m_IsDir ? SPRITE_FILE_FOLDER : SPRITE_FILE_MAP2);
-	IGraphics::CQuadItem QuadItem(FileIcon.x, FileIcon.y, FileIcon.w, FileIcon.h);
-	Graphics()->QuadsDrawTL(&QuadItem, 1);
-	Graphics()->QuadsEnd();
+	RenderTools()->RenderIcon(IMAGE_FILEICONS, m_vFileList[Index].m_IsDir ? SPRITE_FILE_FOLDER : SPRITE_FILE_MAP2, &FileIcon);
 
 	if(DoButton_File(&m_vFileList[Index], m_vFileList[Index].m_aName, m_FilesSelectedIndex == Index, &Button, 0, nullptr))
 	{
@@ -6371,16 +6369,19 @@ void CEditor::OnUpdate()
 		Reset();
 	}
 
-	// handle mouse movement
+	// handle cursor movement
 	{
-		static double s_MouseX = 0.0f;
-		static double s_MouseY = 0.0f;
+		static float s_MouseX = 0.0f;
+		static float s_MouseY = 0.0f;
 
 		float MouseRelX = 0.0f, MouseRelY = 0.0f;
 		IInput::ECursorType CursorType = Input()->CursorRelative(&MouseRelX, &MouseRelY);
 		if(CursorType != IInput::CURSOR_NONE)
 			UIEx()->ConvertMouseMove(&MouseRelX, &MouseRelY, CursorType);
 		UIEx()->ResetMouseSlow();
+
+		m_MouseDeltaX += MouseRelX;
+		m_MouseDeltaY += MouseRelY;
 
 		if(!m_LockMouse)
 		{
@@ -6404,6 +6405,8 @@ void CEditor::OnUpdate()
 
 			m_MouseWorldX = aPoints[0] + WorldWidth * (s_MouseX / Graphics()->WindowWidth());
 			m_MouseWorldY = aPoints[1] + WorldHeight * (s_MouseY / Graphics()->WindowHeight());
+			m_MouseDeltaWx = m_MouseDeltaX * (WorldWidth / Graphics()->WindowWidth());
+			m_MouseDeltaWy = m_MouseDeltaY * (WorldHeight / Graphics()->WindowHeight());
 		}
 		else
 		{
@@ -6430,13 +6433,14 @@ void CEditor::OnRender()
 	ms_pUiGotContext = nullptr;
 	UI()->StartCheck();
 
-	m_MouseDeltaX = m_MouseX - UI()->MouseX();
-	m_MouseDeltaY = m_MouseY - UI()->MouseY();
-	m_MouseDeltaWx = m_MouseWorldX - UI()->MouseWorldX();
-	m_MouseDeltaWy = m_MouseWorldY - UI()->MouseWorldY();
 	UI()->Update(m_MouseX, m_MouseY, m_MouseWorldX, m_MouseWorldY);
 
 	Render();
+
+	m_MouseDeltaX = 0.0f;
+	m_MouseDeltaY = 0.0f;
+	m_MouseDeltaWx = 0.0f;
+	m_MouseDeltaWy = 0.0f;
 
 	if(Input()->KeyPress(KEY_F10))
 	{

@@ -108,9 +108,7 @@ public:
 	}
 };
 
-class CLayer;
 class CLayerGroup;
-class CEditorMap;
 
 class CLayer
 {
@@ -497,11 +495,11 @@ enum
 	DIRECTION_DOWN = 8,
 };
 
-typedef struct
+struct RECTi
 {
 	int x, y;
 	int w, h;
-} RECTi;
+};
 
 class CLayerTiles : public CLayer
 {
@@ -588,10 +586,15 @@ public:
 
 	struct SCommonPropState
 	{
-		bool Modified = false;
-		int Width = -1;
-		int Height = -1;
-		int Color = 0;
+		enum
+		{
+			MODIFIED_SIZE = 1 << 0,
+			MODIFIED_COLOR = 1 << 1,
+		};
+		int m_Modified = 0;
+		int m_Width = -1;
+		int m_Height = -1;
+		int m_Color = 0;
 	};
 	static int RenderCommonProperties(SCommonPropState &State, CEditor *pEditor, CUIRect *pToolbox, std::vector<CLayerTiles *> &vpLayers);
 

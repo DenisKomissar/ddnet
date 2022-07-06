@@ -15,6 +15,10 @@
 #include <unistd.h>
 #endif
 
+#if defined(CONF_PLATFORM_ANDROID)
+#include <android/log.h>
+#endif
+
 extern "C" {
 
 std::atomic<LEVEL> loglevel = LEVEL_INFO;
@@ -158,7 +162,7 @@ public:
 	void Log(const CLogMessage *pMessage) override
 	{
 		int AndroidLevel;
-		switch(Level)
+		switch(pMessage->m_Level)
 		{
 		case LEVEL_TRACE: AndroidLevel = ANDROID_LOG_VERBOSE; break;
 		case LEVEL_DEBUG: AndroidLevel = ANDROID_LOG_DEBUG; break;
@@ -418,7 +422,7 @@ std::unique_ptr<ILogger> log_logger_stdout()
 	switch(GetFileType(pOutput))
 	{
 	case FILE_TYPE_CHAR: return std::make_unique<CWindowsConsoleLogger>(pOutput);
-	case FILE_TYPE_PIPE: // fall through, writing to pipe works the same as writing to a file
+	case FILE_TYPE_PIPE: [[fallthrough]]; // writing to pipe works the same as writing to a file
 	case FILE_TYPE_DISK: return std::make_unique<CWindowsFileLogger>(pOutput);
 	default: return std::make_unique<CLoggerAsync>(io_stdout(), false, false);
 	}

@@ -20,7 +20,7 @@
 
 // support older SDL version (pre 2.0.6)
 #ifndef SDL_JOYSTICK_AXIS_MIN
-#define SDL_JOYSTICK_AXIS_MIN -32768
+#define SDL_JOYSTICK_AXIS_MIN (-32768)
 #endif
 #ifndef SDL_JOYSTICK_AXIS_MAX
 #define SDL_JOYSTICK_AXIS_MAX 32767
@@ -62,12 +62,6 @@ CInput::CInput()
 	m_aEditingText[0] = 0;
 }
 
-CInput::~CInput()
-{
-	SDL_free(m_pClipboardText);
-	CloseJoysticks();
-}
-
 void CInput::Init()
 {
 	m_pGraphics = Kernel()->RequestInterface<IEngineGraphics>();
@@ -78,6 +72,12 @@ void CInput::Init()
 	MouseModeRelative();
 
 	InitJoysticks();
+}
+
+void CInput::Shutdown()
+{
+	SDL_free(m_pClipboardText);
+	CloseJoysticks();
 }
 
 void CInput::InitJoysticks()
@@ -167,16 +167,11 @@ CInput::CJoystick::CJoystick(CInput *pInput, int Index, SDL_Joystick *pDelegate)
 
 void CInput::CloseJoysticks()
 {
-	for(auto &Joystick : m_vJoysticks)
-		Joystick.Close();
+	if(SDL_WasInit(SDL_INIT_JOYSTICK))
+		SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
+
 	m_vJoysticks.clear();
 	m_pActiveJoystick = nullptr;
-}
-
-void CInput::CJoystick::Close()
-{
-	if(SDL_JoystickGetAttached(m_pDelegate))
-		SDL_JoystickClose(m_pDelegate);
 }
 
 void CInput::SelectNextJoystick()
@@ -625,7 +620,7 @@ int CInput::Update()
 		case SDL_MOUSEBUTTONUP:
 			Action = IInput::FLAG_RELEASE;
 
-			// fall through
+			[[fallthrough]];
 		case SDL_MOUSEBUTTONDOWN:
 			if(Event.button.button == SDL_BUTTON_LEFT)
 				Scancode = KEY_MOUSE_1;
@@ -709,7 +704,7 @@ int CInput::Update()
 				MouseModeAbsolute();
 				MouseModeRelative();
 #endif
-				// fallthrough
+				[[fallthrough]];
 			case SDL_WINDOWEVENT_RESTORED:
 				Graphics()->WindowCreateNtf(Event.window.windowID);
 				break;

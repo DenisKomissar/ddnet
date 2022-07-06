@@ -1,20 +1,21 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <engine/shared/config.h>
-#include <game/mapitems.h>
 
 #include <game/generated/protocol.h>
+#include <game/mapitems.h>
+#include <game/teamscore.h>
 
-#include "entities/character.h"
-#include "entities/pickup.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
 #include "player.h"
 
+#include "entities/character.h"
 #include "entities/door.h"
 #include "entities/dragger.h"
 #include "entities/gun.h"
 #include "entities/light.h"
+#include "entities/pickup.h"
 #include "entities/projectile.h"
 
 IGameController::IGameController(class CGameContext *pGameServer)
@@ -603,7 +604,7 @@ void IGameController::Snap(int SnappingClient)
 		GAMEINFOFLAG_ENTITIES_DDRACE |
 		GAMEINFOFLAG_ENTITIES_RACE |
 		GAMEINFOFLAG_RACE;
-	pGameInfoEx->m_Flags2 = 0;
+	pGameInfoEx->m_Flags2 = GAMEINFOFLAG2_HUD_DDRACE;
 	pGameInfoEx->m_Version = GAMEINFO_CURVERSION;
 
 	if(Server()->IsSixup(SnappingClient))
